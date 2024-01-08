@@ -85,88 +85,89 @@ class Solution:
 
     def solve(self, rows: list[Row]) -> int:
 
-        def count_arrangement(row: Row,
-                              n_damaged: int = 0) -> int:
-            key = (str(row), n_damaged)
-            if key in self.cache:
-                self.cache_hits += 1
-                return self.cache[key]
-
-            if row.empty_spring_state and row.empty_damage_group:
-                arrangement = 1
-                self.cache[key] = arrangement
-                return arrangement
-
-            if row.empty_spring_state:
-                if n_damaged == row.top_damaged_group:
-                    top_damage_group = row.damaged_groups.popleft()
-
-                    arrangement = count_arrangement(row, n_damaged=0)
-
-                    row.damaged_groups.appendleft(top_damage_group)
-                else:
-                    arrangement = 0
-                self.cache[key] = arrangement
-                return arrangement
-
-            if row.empty_damage_group:
-                arrangement = 0 if SpringState.DAMAGED in row.spring_states else 1
-                self.cache[key] = arrangement
-                return arrangement
-
-            # Prune
-            if n_damaged > row.top_damaged_group:
-                arrangement = 0
-                self.cache[key] = arrangement
-                return arrangement
-
-            arrangement = 0
-            match (row.top_spring_state):
-                case SpringState.OPERATIONAL:
-                    if n_damaged == row.top_damaged_group:  # aligned
-                        top_spring_state = row.spring_states.popleft()
-                        top_damage_group = row.damaged_groups.popleft()
-
-                        arrangement = count_arrangement(row, n_damaged=0)
-
-                        row.spring_states.appendleft(top_spring_state)
-                        row.damaged_groups.appendleft(top_damage_group)
-                    elif n_damaged == 0:  # no damage group
-                        top_spring_state = row.spring_states.popleft()
-
-                        arrangement = count_arrangement(row, n_damaged=0)
-
-                        row.spring_states.appendleft(top_spring_state)
-                    else:  # not aligned
-                        arrangement = 0
-                case SpringState.DAMAGED:
-                    top_spring_state = row.spring_states.popleft()
-
-                    arrangement = count_arrangement(row, n_damaged=n_damaged + 1)
-
-                    row.spring_states.appendleft(top_spring_state)
-                case SpringState.UNKNOWN:
-                    for replace in (SpringState.OPERATIONAL, SpringState.DAMAGED):
-                        row.spring_states[0] = replace
-                        arrangement += count_arrangement(row, n_damaged=n_damaged)
-                    row.spring_states[0] = SpringState.UNKNOWN
-                case _:
-                    raise ValueError(f"State {row.top_spring_state} is invalid")
-
-            self.cache[key] = arrangement
-            return arrangement
-
         total_arrangement = 0
         for row in rows:
-            row = self._unfold(row)
-            arrangement = count_arrangement(row)
+            row = self.unfold(row)
+            arrangement = self.count_arrangement(row)
             # print(f"{row}, {arrangement}")
             total_arrangement += arrangement
         # print(self.cache_hits)
         return total_arrangement
 
+    def count_arrangement(self,
+                          row: Row,
+                          n_damaged: int = 0) -> int:
+        key = (str(row), n_damaged)
+        if key in self.cache:
+            self.cache_hits += 1
+            return self.cache[key]
+
+        if row.empty_spring_state and row.empty_damage_group:
+            arrangement = 1
+            self.cache[key] = arrangement
+            return arrangement
+
+        if row.empty_spring_state:
+            if n_damaged == row.top_damaged_group:
+                top_damage_group = row.damaged_groups.popleft()
+
+                arrangement = self.count_arrangement(row, n_damaged=0)
+
+                row.damaged_groups.appendleft(top_damage_group)
+            else:
+                arrangement = 0
+            self.cache[key] = arrangement
+            return arrangement
+
+        if row.empty_damage_group:
+            arrangement = 0 if SpringState.DAMAGED in row.spring_states else 1
+            self.cache[key] = arrangement
+            return arrangement
+
+        # Prune
+        if n_damaged > row.top_damaged_group:
+            arrangement = 0
+            self.cache[key] = arrangement
+            return arrangement
+
+        arrangement = 0
+        match (row.top_spring_state):
+            case SpringState.OPERATIONAL:
+                if n_damaged == row.top_damaged_group:  # aligned
+                    top_spring_state = row.spring_states.popleft()
+                    top_damage_group = row.damaged_groups.popleft()
+
+                    arrangement = self.count_arrangement(row, n_damaged=0)
+
+                    row.spring_states.appendleft(top_spring_state)
+                    row.damaged_groups.appendleft(top_damage_group)
+                elif n_damaged == 0:  # no damage group
+                    top_spring_state = row.spring_states.popleft()
+
+                    arrangement = self.count_arrangement(row, n_damaged=0)
+
+                    row.spring_states.appendleft(top_spring_state)
+                else:  # not aligned
+                    arrangement = 0
+            case SpringState.DAMAGED:
+                top_spring_state = row.spring_states.popleft()
+
+                arrangement = self.count_arrangement(row, n_damaged=n_damaged + 1)
+
+                row.spring_states.appendleft(top_spring_state)
+            case SpringState.UNKNOWN:
+                for replace in (SpringState.OPERATIONAL, SpringState.DAMAGED):
+                    row.spring_states[0] = replace
+                    arrangement += self.count_arrangement(row, n_damaged=n_damaged)
+                row.spring_states[0] = SpringState.UNKNOWN
+            case _:
+                raise ValueError(f"State {row.top_spring_state} is invalid")
+
+        self.cache[key] = arrangement
+        return arrangement
+
     @staticmethod
-    def _unfold(row: Row, fold_rate=FOLD_RATE) -> Row:
+    def unfold(row: Row, fold_rate=FOLD_RATE) -> Row:
         spring_states = deque(SpringState.UNKNOWN.join(["".join(row.spring_states)] * fold_rate))
         damaged_groups = deque(row.damaged_groups * fold_rate)
 
